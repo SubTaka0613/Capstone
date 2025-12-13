@@ -285,134 +285,293 @@ with tab2:
 
 
 # ==========================================
-# TAB 3: FVA & BIAS (HISTORY SIMULATION)
-# Matches Section 6.4: "The Human-in-the-Loop"
+# TAB 3: THE BIAS AUDIT (COMPLEX PATTERNS)
 # ==========================================
 with tab3:
-    st.header("Auditing the Human Planner")
+    st.header("6.4 Man vs. Machine: The Hidden Pattern")
     st.markdown(
         """
-    **Context:** We use the "Model as Anchor" workflow. But does the human add value?
-    We audit this using **FVA (Forecast Value Added)** and **Bias Tracking**.
-    *Positive FVA = Human improved the model. Negative FVA = Algorithm Aversion cost us money.*
+    **The Concept:** Algorithms excel at finding non-linear patterns buried in noise.
+    
+    **The Challenge:** You will see 12 weeks of sales history.
+    The "System" has detected a complex signal (Saturation, Stockpiling, or Regime Change).
+    **Can you spot the truth through the noise?**
     """
     )
 
-    col_sim, col_res = st.columns([1, 2])
+    # --- Session State ---
+    if "game_state" not in st.session_state:
+        st.session_state.game_state = {
+            "round": 1,
+            "history": [],
+            "game_over": False,
+            # We pre-select a random complex pattern for the user to face
+            "pattern_type": np.random.choice(
+                ["saturation", "stockpiling", "step_change"]
+            ),
+        }
 
-    with col_sim:
-        st.subheader("Simulation")
-        st.markdown("Generate 10 weeks of history to audit performance.")
+    # --- COMPLEX DATA GENERATOR ---
+    def generate_complex_context(round_num, pattern):
+        # Time horizon: 12 weeks back, 1 week forward
+        t = np.arange(1, 15)
 
-        if st.button("🎲 Simulate 10 Weeks"):
-            np.random.seed(123)  # Consistent demo
+        # 1. GENERATE THE HIDDEN SIGNAL (The "Truth" the model sees)
+        if pattern == "saturation":
+            # Logarithmic growth that flattens out (Humans tend to over-extrapolate linearly)
+            signal = 800 + 200 * np.log(t)
+            explain_title = "Saturation (Diminishing Returns)"
+            explain_text = "The growth was slowing down (Logarithmic). Humans often project linear growth and over-shoot."
 
-            # Generate History Data
-            weeks = [f"W{i}" for i in range(1, 11)]
-            system_fcsts = np.random.randint(900, 1100, 10)
-            actuals = system_fcsts + np.random.normal(
-                0, 50, 10
-            )  # System has random error
+        elif pattern == "stockpiling":
+            # Mean reversion: High weeks are followed by low weeks
+            signal = np.zeros_like(t)
+            signal[0] = 1000
+            for i in range(1, len(t)):
+                # If yesterday was high, today is low (negative auto-correlation)
+                deviation = signal[i - 1] - 1000
+                signal[i] = 1000 - (0.8 * deviation)
 
-            # Simulate a "Biased Human" (Always adds +50 to +100 units - Optimism Bias)
-            human_adjustments = np.random.randint(20, 80, 10)
-            final_plans = system_fcsts + human_adjustments
+            # Add a trend so it's not too obvious
+            signal += t * 10
+            explain_title = "Stockpiling Effect (Mean Reversion)"
+            explain_text = "High sales led to pantry loading, causing a dip the next week. Humans miss this 'Zig-Zag' pattern."
 
-            # Store in Dataframe
-            df_hist = pd.DataFrame(
-                {
-                    "Week": weeks,
-                    "System Forecast": system_fcsts,
-                    "Human Adj": human_adjustments,
-                    "Final Plan": final_plans,
-                    "Actual Sales": actuals.astype(int),
-                }
-            )
+        elif pattern == "step_change":
+            # A structural break happened recently
+            signal = np.ones_like(t) * 900
+            signal[8:] = 1200  # Sudden jump at week 8
+            explain_title = "Structural Break (Regime Change)"
+            explain_text = "The baseline shifted permanently at Week 8. Humans often 'anchor' to the old average (900)."
 
-            # Calculate Errors
-            df_hist["Sys Error"] = np.abs(
-                df_hist["System Forecast"] - df_hist["Actual Sales"]
-            )
-            df_hist["Final Error"] = np.abs(
-                df_hist["Final Plan"] - df_hist["Actual Sales"]
-            )
-            df_hist["FVA"] = (
-                df_hist["Sys Error"] - df_hist["Final Error"]
-            )  # Positive = Good
+        # 2. ADD NOISE (What the user sees)
+        np.random.seed(round_num * 55)  # Deterministic noise per round
+        noise = np.random.normal(0, 40, len(t))
+        noisy_data = signal + noise
 
-            st.session_state["history"] = df_hist
+        # 3. PREPARE OUTPUTS
+        history_x = list(range(1, 13))
+        history_y = noisy_data[:12]  # Past 12 weeks
 
-    with col_res:
-        if "history" in st.session_state:
-            df = st.session_state["history"]
+        # The System Forecast sees the SIGNAL + tiny noise (It ignores the heavy noise)
+        future_idx = 12
+        system_forecast = signal[future_idx] + np.random.normal(0, 5)
 
-            # 1. KPI Scorecards
-            total_fva = df["FVA"].sum()
-            avg_bias = (df["Final Plan"] - df["Actual Sales"]).mean()
+        # The Actual includes the heavy noise
+        actual_sales = noisy_data[future_idx]
 
-            kpi1, kpi2, kpi3 = st.columns(3)
-            kpi1.metric(
-                "Total FVA (Value Add)",
-                f"{total_fva:.0f}",
-                delta="Human Added Value" if total_fva > 0 else "Human Destroyed Value",
-            )
-            kpi2.metric("MAE (System)", f"{df['Sys Error'].mean():.0f}")
-            kpi3.metric(
-                "MAE (Human)",
-                f"{df['Final Error'].mean():.0f}",
-                delta=f"{(df['Sys Error'].mean() - df['Final Error'].mean()):.0f} Improvement",
-            )
+        # Return the "Clean Signal" for the reveal chart later
+        full_signal_x = list(range(1, 14))
+        full_signal_y = signal[:13]
 
-            st.divider()
+        return (
+            history_x,
+            history_y,
+            system_forecast,
+            actual_sales,
+            explain_title,
+            explain_text,
+            full_signal_x,
+            full_signal_y,
+        )
 
-            # 2. Bias Analysis
-            st.subheader("Bias Detection Radar")
-            if avg_bias > 20:
-                st.error(
-                    f"⚠️ **Optimism Bias Detected:** The Human planner is over-forecasting by an average of {avg_bias:.0f} units per week."
+    # --- GAME UI ---
+    col_game, col_results = st.columns([2, 1])
+
+    with col_game:
+        if not st.session_state.game_state["game_over"]:
+            # Generate Data
+            if "current_data" not in st.session_state:
+                st.session_state.current_data = generate_complex_context(
+                    st.session_state.game_state["round"],
+                    st.session_state.game_state["pattern_type"],
                 )
-            elif avg_bias < -20:
-                st.warning(
-                    f"⚠️ **Pessimism Bias Detected:** The Human planner is consistently under-forecasting."
-                )
-            else:
-                st.success(
-                    "✅ **Unbiased:** The planner's adjustments are well-centered."
-                )
 
-            # 3. Visualization
-            fig3 = go.Figure()
-            fig3.add_trace(
+            hist_x, hist_y, sys_fcst, actual, title, text, sig_x, sig_y = (
+                st.session_state.current_data
+            )
+
+            # 1. Visualization (Context)
+            fig_ctx = go.Figure()
+            fig_ctx.add_trace(
                 go.Scatter(
-                    x=df["Week"],
-                    y=df["System Forecast"],
-                    name="System (Anchor)",
-                    line=dict(color="gray", dash="dot"),
-                )
-            )
-            fig3.add_trace(
-                go.Scatter(
-                    x=df["Week"],
-                    y=df["Final Plan"],
-                    name="Final Plan (Adjusted)",
-                    line=dict(color="blue"),
-                )
-            )
-            fig3.add_trace(
-                go.Scatter(
-                    x=df["Week"],
-                    y=df["Actual Sales"],
-                    name="Actuals",
-                    line=dict(color="green", width=3),
+                    x=hist_x,
+                    y=hist_y,
+                    mode="lines+markers",
+                    name="Sales History",
+                    line=dict(color="black", width=2),
+                    marker=dict(size=8),
                 )
             )
 
-            fig3.update_layout(
-                title="History: System vs Human vs Reality",
+            # System Forecast Ghost
+            fig_ctx.add_trace(
+                go.Scatter(
+                    x=[13],
+                    y=[sys_fcst],
+                    mode="markers",
+                    name="System Forecast",
+                    marker=dict(color="gray", size=14, symbol="star", opacity=0.7),
+                )
+            )
+
+            fig_ctx.update_layout(
+                title=f"Week {st.session_state.game_state['round']} / 5",
+                xaxis_title="Weeks Ago",
+                yaxis_title="Sales",
                 height=400,
+                showlegend=True,
                 template="plotly_white",
             )
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig_ctx, use_container_width=True)
+
+            # 2. Inputs
+            c1, c2, c3 = st.columns([1, 1, 2])
+            c1.metric("🤖 System", f"{sys_fcst:.0f}")
+
+            with c2:
+                user_adj = st.number_input("Adjustment", value=0, step=10)
+
+            with c3:
+                st.write("")  # Spacer
+                st.write("")
+                if st.button(
+                    "🚀 Lock Prediction", type="primary", use_container_width=True
+                ):
+                    final_plan = sys_fcst + user_adj
+
+                    # Record Logic
+                    bias = final_plan - actual
+                    fva = abs(sys_fcst - actual) - abs(final_plan - actual)
+
+                    st.session_state.game_state["history"].append(
+                        {
+                            "Round": st.session_state.game_state["round"],
+                            "System": sys_fcst,
+                            "User": final_plan,
+                            "Actual": actual,
+                            "Error": bias,
+                            "Signal_X": sig_x,  # Save for reveal
+                            "Signal_Y": sig_y,
+                            "Pattern_Title": title,
+                            "Pattern_Text": text,
+                        }
+                    )
+
+                    st.session_state.game_state["round"] += 1
+                    del st.session_state.current_data
+
+                    if st.session_state.game_state["round"] > 5:
+                        st.session_state.game_state["game_over"] = True
+
+                    st.rerun()
 
         else:
-            st.info("Click 'Simulate 10 Weeks' to generate an audit report.")
+            # --- GAME OVER / REVEAL SCREEN ---
+            st.success("🏁 Audit Complete!")
+            if st.button("🔄 Start New Audit"):
+                st.session_state.game_state = {
+                    "round": 1,
+                    "history": [],
+                    "game_over": False,
+                    "pattern_type": np.random.choice(
+                        ["saturation", "stockpiling", "step_change"]
+                    ),
+                }
+                if "current_data" in st.session_state:
+                    del st.session_state.current_data
+                st.rerun()
+
+    # --- SCOREBOARD & REVEAL ---
+    with col_results:
+        st.subheader("📋 Audit Report")
+
+        if st.session_state.game_state["history"]:
+            df = pd.DataFrame(st.session_state.game_state["history"])
+
+            # KPIs
+            user_mae = (df["User"] - df["Actual"]).abs().mean()
+            sys_mae = (df["System"] - df["Actual"]).abs().mean()
+            bias = df["Error"].mean()
+
+            k1, k2 = st.columns(2)
+            k1.metric("System MAE", f"{sys_mae:.0f}")
+            k2.metric(
+                "Your MAE",
+                f"{user_mae:.0f}",
+                delta=f"{sys_mae - user_mae:.0f}",
+                delta_color="normal",
+            )
+            st.metric(
+                "Your Bias",
+                f"{bias:.0f}",
+                delta="Over-Forecasting" if bias > 0 else "Under-Forecasting",
+                delta_color="inverse",
+            )
+
+            # --- THE "DECODER" REVEAL ---
+            if st.session_state.game_state["game_over"]:
+                st.divider()
+                st.markdown("### 🔍 The Decoder Ring")
+                st.markdown(f"**Hidden Pattern:** {df['Pattern_Title'].iloc[0]}")
+                st.caption(df["Pattern_Text"].iloc[0])
+
+                # Plot the LAST round's reveal to show them what they missed
+                last_round = df.iloc[-1]
+
+                fig_reveal = go.Figure()
+
+                # 1. The Noisy Data (What they saw)
+                # We reconstruct it roughly from the saved signal + noise implication or just plot the signal vs actual
+                # Ideally we plot the clean signal over the noisy actuals
+
+                fig_reveal.add_trace(
+                    go.Scatter(
+                        x=last_round["Signal_X"],
+                        y=last_round["Signal_Y"],
+                        mode="lines",
+                        name="Hidden Signal",
+                        line=dict(color="red", width=3),
+                    )
+                )
+
+                fig_reveal.add_trace(
+                    go.Scatter(
+                        x=[13],
+                        y=[last_round["System"]],
+                        mode="markers",
+                        name="System",
+                        marker=dict(color="gray", symbol="star", size=12),
+                    )
+                )
+
+                fig_reveal.add_trace(
+                    go.Scatter(
+                        x=[13],
+                        y=[last_round["Actual"]],
+                        mode="markers",
+                        name="Actual",
+                        marker=dict(color="green", size=12),
+                    )
+                )
+
+                fig_reveal.add_annotation(
+                    x=6,
+                    y=min(last_round["Signal_Y"]),
+                    text="The algorithm saw the Red Line.<br>You saw the Noise.",
+                    showarrow=False,
+                    font=dict(color="red"),
+                )
+
+                fig_reveal.update_layout(
+                    title="Visualizing the Hidden Signal",
+                    height=350,
+                    template="plotly_white",
+                )
+                st.plotly_chart(fig_reveal, use_container_width=True)
+
+            else:
+                st.dataframe(
+                    df[["Round", "System", "User", "Actual"]].style.format("{:.0f}"),
+                    use_container_width=True,
+                )
