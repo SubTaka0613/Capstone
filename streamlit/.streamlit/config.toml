@@ -1,0 +1,9 @@
+[theme]
+# Sets the default theme to 'light' instead of 'auto'
+base = "light"
+
+# Optional: You can also define your colors here for a custom light theme
+# primaryColor = "#ff4b4b"
+# backgroundColor = "#ffffff"
+# secondaryBackgroundColor = "#f0f2f6"
+# textColor = "#31333F"
