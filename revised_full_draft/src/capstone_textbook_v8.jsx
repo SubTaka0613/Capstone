@@ -1505,7 +1505,8 @@ function ChatBot({ accent }) {
         "how do i use","user guide","visual"
         ];
 
-        const isMeta = META_KEYWORDS.some(k => ql.includes(k));
+        const isMeta = META_KEYWORDS.some(k => ql.includes(k))
+        || /what is chapter\s*\d|chapter\s*\d.*about|tell me about chapter/i.test(userMsg);
 
         /* ── keyword retrieval from KB / GLOSSARY / PRACTICE ── */
         const kbHits = KB
@@ -1553,23 +1554,18 @@ function ChatBot({ accent }) {
     : "No specific textbook section matched — answer from general knowledge."}`;
 
         const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
+          method: "POST",
+          headers: {
             "Content-Type": "application/json",
-            "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 512,
+          },
+          body: JSON.stringify({
             system,
-            messages: [{ role: "user", content: userMsg }],
-        }),
+            userMsg,
+          }),
         });
 
         const data = await res.json();
-        return data?.content?.[0]?.text ?? "No response received.";
+        return data?.text ?? "No response received.";
     } catch (e) {
         return "Couldn't reach AI: " + (e?.message || String(e));
     } finally {
