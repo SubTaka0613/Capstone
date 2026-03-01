@@ -1,0 +1,32 @@
+// From Forecasts to Decisions
+digraph {
+	fontname=Arial nodesep=0.6 rankdir=LR ranksep=0.8 splines=ortho
+	node [fontname=Arial fontsize=12 shape=box style="rounded,filled"]
+	subgraph cluster_problem {
+		color="#ffcccc" fontcolor="#990000" label="The \"Technical\" Trap (Problem)" style=filled
+		Input [label="Raw Sales Data" color=grey fillcolor=white]
+		Model [label="Complex Black Box Model" color=grey fillcolor=white]
+		Metric [label="Minimize RMSE (Error)" color=red fillcolor="#ffe6e6"]
+		Outcome [label="Ignored by Business
+(No Trust)" color=red fillcolor="#ffcccc" shape=parallelogram]
+		Input -> Model
+		Model -> Metric
+		Metric -> Outcome
+	}
+	subgraph cluster_solution {
+		color="#ccffcc" fontcolor="#006600" label="Our Decision-Aware Framework (Solution)" style=filled
+		Data [label="Cleaned Data + Features" fillcolor=white]
+		Hybrid [label="Hybrid Model
+(ETS Trend + XGBoost Calendar)" color=blue fillcolor=white]
+		Context [label="Risk & Uncertainty
+(Prediction Intervals)" color=green fillcolor="#e6ffe6"]
+		Action [label="Actionable Plan
+(Human-in-the-Loop)" color=green fillcolor="#ccffcc" shape=parallelogram]
+		Data -> Hybrid
+		Hybrid -> Context [label="Interpretable
+Outputs"]
+		Context -> Action [label="Decision
+Support"]
+	}
+	Outcome -> Data [style=invis]
+}
