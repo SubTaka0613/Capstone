@@ -1552,7 +1552,7 @@ function ChatBot({ accent }) {
     ? `TEXTBOOK CONTENT RETRIEVED FOR THIS QUESTION:\n${context}`
     : "No specific textbook section matched — answer from general knowledge."}`;
 
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetch("/api/chat", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
